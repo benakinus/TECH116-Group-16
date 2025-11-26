@@ -64,6 +64,7 @@
       on a LCD display in the form of <strong>Beats Per Minute</strong>
     </p>
     <img src="KY-039.png" alt="Arduino collision warning system">
+    <img src="LCD.png" alt="Arduino collision warning system">
   </section>
 
   <section id="environment">
@@ -95,30 +96,30 @@
         <tr>
           <td>Arduino Uno Rev3</td>
           <td>1</td>
-          <td>$27.60</td>
-          <td>$27.60</td>
-          <td><a href="https://store-usa.arduino.cc/products/arduino-uno-rev3">Arduino Store</a></td>
+          <td>$21.99</td>
+          <td>$21.99</td>
+          <td><a href="https://www.amazon.ca/PTSolns-ATmega328P-Microcontroller-Development-Compatible/dp/B0DT2DVP7C/ref=sr_1_2_sspa">Arduino Store</a></td>
         </tr>
         <tr>
-          <td>KY-039 Pulse Sensor</td>
+          <td>KY-039 Pulse Sensor (Pack of 3)</td>
           <td>1</td>
+          <td>$2.99</td>
           <td>$8.99</td>
-          <td>$8.99</td>
-          <td><a href="https://www.adafruit.com/product/3942">Amazon</a></td>
+          <td><a href="https://www.amazon.ca/KY-039-Finger-Heartbeat-Measurement-Arduino/dp/B07S8N69DK/ref=sr_1_1">Amazon</a></td>
         </tr>
         <tr>
           <td>16x2 LCD Arduino Display</td>
           <td>1</td>
-          <td>$0.95</td>
-          <td>$0.95</td>
-          <td><a href="https://www.sparkfun.com/passive-buzzer-module.html">SparkFun</a></td>
+          <td>$10.36</td>
+          <td>$10.36</td>
+          <td><a href="https://www.amazon.ca/Freenove-Display-Compatible-Arduino-Raspberry/dp/B0B76YGDV4/ref=sr_1_5?th=1">Amazon</a></td>
         </tr>
         <tr>
           <td>LEDs (Red, Yellow, Green)</td>
           <td>3</td>
-          <td>$0.20</td>
-          <td>$0.60</td>
-          <td>Adafruit</td>
+          <td>$0.05</td>
+          <td>$0.15</td>
+          <td><a href="https://www.digikey.ca/en/products/detail/everlight-electronics-co-ltd/HLMPD150A/2675555">DigiKey</a></td>
         </tr>
         <tr>
           <td>220 Ω Resistors</td>
@@ -130,9 +131,9 @@
         <tr>
           <td>Breadboard</td>
           <td>1</td>
-          <td>$4.95</td>
-          <td>$4.95</td>
-          <td><a href="https://www.adafruit.com/product/64">Adafruit</a></td>
+          <td>$5.00</td>
+          <td>$5.00</td>
+          <td><a href="https://www.amazon.ca/MMOBIEL-Solderless-Breadboards-Prototype-Circuit/dp/B0CPJP9YSN/ref=sr_1_23">Amazon</a></td>
         </tr>
         <tr>
           <td>Jumper Wires</td>
@@ -175,79 +176,86 @@
     <pre class="line-numbers">
   <button class="copy-btn" onclick="copyCode()">Copy</button>
   <code id="arduinoCode" class="language-cpp">
-// Collision Warning System with Distance Sensor (HC-SR04)
-// Author: Ana Rodrigues
-// Oct 2, 2025
-// Object is farther than 50cm: Green LED lights up
-// Object is closer than 50 cm, but more than 10cm away: Yellow LED lights, buzzer plays 300Hz tone
-// Object is closer than 10cm: Red LED lights up, buzzer plays 500Hz tone
+#define samp_siz 4 
+#define rise_threshold 5 
+// Pulse Monitor Test Script 
+int sensorPin = 0; 
+void setup() { 
+	  Serial.begin(9600); 
+} 
+void loop () 
+{ 
+	  float reads[samp_siz], sum; 
+	  long int now, ptr; 
+	  float last, reader, start; 
+	  float first, second, third, before, print_value; 
+	  bool rising; 
+	  int rise_count; 
+	  int n; 
+	  long int last_beat; 
+	  for (int i = 0; i < samp_siz; i++) 
+	    reads[i] = 0; 
+	  sum = 0; 
+	  ptr = 0; 
+	  while(1) 
+	  { 
+	    // calculate an average of the sensor 
+	    // during a 20 ms period (this will eliminate 
+	    // the 50 Hz noise caused by electric light 
+	    n = 0; 
+	    start = millis(); 
+	    reader = 0.; 
+	    do 
+	    { 
+	      reader += analogRead (sensorPin); 
+	      n++; 
+	      now = millis(); 
+	    } 
+	    while (now < start + 20);   
+	    reader /= n;  // we got an average 
+	    // Add the newest measurement to an array 
+	    // and subtract the oldest measurement from the array 
+	    // to maintain a sum of last measurements 
+	    sum -= reads[ptr]; 
+	    sum += reader; 
+	    reads[ptr] = reader; 
+	    last = sum / samp_siz; 
+	    // now last holds the average of the values in the array 
+	    // check for a rising curve (= a heart beat) 
+	    if (last > before) 
+	    { 
+	      rise_count++; 
+	      if (!rising && rise_count > rise_threshold) 
+	      { 
+	        // Ok, we have detected a rising curve, which implies a heartbeat. 
+	        // Record the time since last beat, keep track of the two previous 
+	        // times (first, second, third) to get a weighed average. 
+	        // The rising flag prevents us from detecting the same rise  
+	        // more than once. 
+	        rising = true; 
+	        first = millis() - last_beat; 
+	        last_beat = millis(); 
+	        // Calculate the weighed average of heartbeat rate 
+	        // according to the three last beats 
+	        print_value = 60000. / (0.4 * first + 0.3 * second + 0.3 * third); 
+	        Serial.print(print_value); 
+	        Serial.print('\ '); 
+	        third = second; 
+	        second = first; 
+	      } 
+	    } 
+	    else 
+	    { 
+	      // Ok, the curve is falling 
+	      rising = false; 
+	      rise_count = 0; 
+	    } 
+	    before = last; 
+	    ptr++; 
+	    ptr %= samp_siz; 
+	  } 
+}  
 
-//LED pins
-const int greenLED = 2;
-const int yellowLED = 3;
-const int redLED = 4;
-
-// Ultrasonic sensor pins
-const int trigPin = 9;
-const int echoPin = 10;
-
-// Passive buzzer pin
-const int buzzer = 11;
-
-void setup() {
-  pinMode(greenLED, OUTPUT);
-  pinMode(yellowLED, OUTPUT);
-  pinMode(redLED, OUTPUT);
-  pinMode(trigPin, OUTPUT);
-  pinMode(echoPin, INPUT);
-  Serial.begin(9600);
-}
-
-void loop() {
-  // Measure distance
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
-
-  long duration = pulseIn(echoPin, HIGH);
-  long distance = duration * 0.034 / 2;
-
-  Serial.print("Distance: ");
-  Serial.print(distance);
-  Serial.println(" cm");
-  
-  //Error in measurement:
-  if (distance <= 0)
-    return;
-
-  //Too close:
-  if (distance <= 10) {
-    digitalWrite(greenLED, LOW);
-    digitalWrite(yellowLED, LOW);
-    digitalWrite(redLED, HIGH);
-    tone(buzzer, 500); // Play 500Hz tone
-    return;
-  }
-
-  //Midrange:
-  if (distance <= 30) {
-    digitalWrite(greenLED, LOW);
-    digitalWrite(yellowLED, HIGH);
-    digitalWrite(redLED, LOW);
-    tone(buzzer, 300); // Play 300Hz tone
-    return;
-  }
-
-  //Normal status:
-  digitalWrite(greenLED, HIGH);
-  digitalWrite(yellowLED, LOW);
-  digitalWrite(redLED, LOW);
-  noTone(buzzer); // stop buzzer
-
-  delay(100);
-}
     </code></pre>
 
     <script>
@@ -287,19 +295,19 @@ void loop() {
 
     <li>
       Phipps Electronics. (2021, March 1). 
-      <em>Buzzer projects.</em> 
+      <em>Using the heart beat sensor KY-039 with Arduino</em> 
       Arduino Project Hub. 
-      <a href="https://create.arduino.cc/projecthub/projects/tags/buzzer" target="_blank" rel="noopener noreferrer">
-        https://create.arduino.cc/projecthub/projects/tags/buzzer
+      <a href="https://www.phippselectronics.com/using-the-heart-beat-sensor-ky-039-with-arduino/" target="_blank" rel="noopener noreferrer">
+        https://www.phippselectronics.com/using-the-heart-beat-sensor-ky-039-with-arduino/
       </a>
     </li>
 
     <li>
-      Arduino Project Hub. (n.d.). 
-      <em>LED projects.</em> 
-      Arduino Project Hub. 
-      <a href="https://projecthub.arduino.cc/projects/tags/led" target="_blank" rel="noopener noreferrer">
-        https://projecthub.arduino.cc/projects/tags/led
+      Last Minute Engineers.(2025, May 29). 
+      <em>In-depth: Detect, Measure & Plot Heart Rate Using Pulse Sensor & Arduino..</em> 
+      Last Minute Engineers. 
+      <a href="https://lastminuteengineers.com/pulse-sensor-arduino-tutorial/ " target="_blank" rel="noopener noreferrer">
+        https://lastminuteengineers.com/pulse-sensor-arduino-tutorial/ 
       </a>
     </li>
 
