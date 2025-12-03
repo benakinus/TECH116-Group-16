@@ -175,103 +175,148 @@
     <pre class="line-numbers">
   <button class="copy-btn" onclick="copyCode()">Copy</button>
   <code id="arduinoCode" class="language-cpp">
+
 #define samp_siz 4
 #define rise_threshold 4
 
- 
+#include <LiquidCrystal.h>
+
 const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
- 
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
-// Pulse Monitor  Test Script
-int sensorPin = 0;
+
+int sensorPin = A0;
+
+const int redLED = 6;
+const int yellowLED = 7;
+const int greenLED = 13; 
+
+byte heart[] = {
+  B00000,
+  B00000,
+  B11011,
+  B11111,
+  B11111,
+  B01110,
+  B00100,
+  B00000
+};
 
 void setup() {
     lcd.begin(16, 2);
+    // Turn on the display
+    lcd.display();
+    // Load custom character into memory slot 0
+    lcd.createChar(0, heart);
     Serial.begin(9600);
+    lcd.print("Heart Monitor");
+    pinMode(redLED, OUTPUT);
+    pinMode(yellowLED, OUTPUT);
+    pinMode(greenLED, OUTPUT);
+
+    
 }
 
-void  loop ()
-{
-    float reads[samp_siz], sum;
-    long int now, ptr;
-    float  last, reader, start;
-    float first, second, third, before, print_value;
-    bool rising;
-    int rise_count;
-    int n;
-    long int last_beat;
+void loop() {
 
+    float reads[samp_siz];
+    float sum = 0;
+
+    long int now, ptr = 0;
+    float last = 0, reader = 0, start = 0;
+    float first = 0, second = 0, third = 0;
+    float before = 0;
+    float print_value = 0;
+
+    bool rising = false;
+    int rise_count = 0;
+
+    long int last_beat = millis();   // initialize properly
+
+    // Initialize array
     for (int i = 0; i < samp_siz; i++)
-      reads[i] = 0;
-    sum = 0;
-    ptr = 0;
+        reads[i] = 0;
 
-    while(1)
-    {
-      // calculate an average of the  sensor
-      // during a 20 ms period (this will eliminate
-      // the 50  Hz noise caused by electric light
-      n = 0;
-      start = millis();
-      reader = 0.;
-      do
-      {
-        reader += analogRead (sensorPin);
-        n++;
-        now = millis();
-      }
-      while (now < start +  20);  
-      reader /= n;  // we got an average
-      
-      // Add the  newest measurement to an array
-      // and subtract the oldest measurement from  the array
-      // to maintain a sum of last measurements
-      sum -= reads[ptr];
-      sum += reader;
-      reads[ptr] = reader;
-      last = sum / samp_siz;
-      // now last holds the average of the values in the array
+    while (1) {
 
-      // check  for a rising curve (= a heart beat)
-      if (last > before)
-      {
-        rise_count++;
-        if (!rising && rise_count > rise_threshold)
-        {
-          //  Ok, we have detected a rising curve, which implies a heartbeat.
-          //  Record the time since last beat, keep track of the two previous
-          //  times (first, second, third) to get a weighed average.
-          // The rising  flag prevents us from detecting the same rise more than once.
-          rising  = true;
-          first = millis() - last_beat;
-          last_beat = millis();
+        // Average over ~20ms to remove 50Hz noise
+        int n = 0;
+        reader = 0;
+        start = millis();
 
-          // Calculate the weighed average of heartbeat rate
-          // according  to the three last beats
-          print_value = 60000. / (0.4 * first + 0.3 *  second + 0.3 * third);
+        do {
+            reader += analogRead(sensorPin);
 
-          lcd.setCursor(0, 1);
-          lcd.print(print_value);
-          Serial.print(print_value);
-          Serial.print('\n');
-          
-          third = second;
-          second  = first;
-          
+            
+        
+            n++;
+            now = millis();
+        } while (now < start + 20);
+
+        reader /= n;
+
+      //Serial.print("reader = ");
+            //Serial.println(reader);
+            
+           
+        // Rolling average buffer
+        sum -= reads[ptr];
+        sum += reader;
+        reads[ptr] = reader;
+        last = sum / samp_siz;
+
+        // Detect rising edge (heartbeat)
+        if (last > before) {
+            rise_count++;
+
+            if (!rising && rise_count > rise_threshold) {
+                rising = true;
+
+                first = millis() - last_beat;
+                last_beat = millis();
+
+                // Avoid divide-by-zero
+                if (first < 1) first = 1;
+
+                // Weighted BPM average
+                print_value = 60000.0 /
+                    (0.4 * first + 0.3 * second + 0.3 * third);
+
+              int bpm = round(print_value); 
+              lcd.clear();
+              lcd.print("Heart Monitor");
+                lcd.setCursor(0, 1);
+                lcd.print("BPM:");
+                lcd.print(bpm);
+              
+               lcd.setCursor(10,1);
+              lcd.print(byte(0));
+            delay(100);
+        lcd.setCursor(10,1);
+            lcd.print(' ');
+            lcd.write(byte(0));
+            delay(100);
+
+              
+                Serial.print(" Print Value: ");
+                Serial.println(print_value);
+
+              Serial.print(" BPM : ");
+              Serial.println(bpm);
+                // Shift beat memory
+                third = second;
+                second = first;
+            }
+
+        } else {
+            // Falling edge
+            rising = false;
+            rise_count = 0;
         }
-      }
-      else
-      {
-        //  Ok, the curve is falling
-        rising = false;
-        rise_count = 0;
-      }
-      before = last;
-      
-      
-      ptr++;
-      ptr  %= samp_siz;
 
+        before = last;
+
+        // Move circular buffer pointer
+        ptr = (ptr + 1) % samp_siz;
     }
 }
 
